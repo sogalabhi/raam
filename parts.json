@@ -1,0 +1,870 @@
+{
+  "_note": "Illustrative data from the team's Excel (Track 4). adjAnnualDemand = baseAnnualDemand x 10000/5500 (vehicle-mix adjustment used in the Algorithms sheet). The 6 'testSet' parts are the worked example; the other 14 are catalogue filler for the warehouse map.",
+  "serviceCentre": "Banjara Hills, Hyderabad (illustrative)",
+  "assumptions": {
+    "holdingCostRate": 0.2,
+    "orderingCost": {
+      "Domestic": 500,
+      "Import": 5000
+    },
+    "demandCV": {
+      "Scheduled": 0.15,
+      "Failure-Driven": 0.45
+    },
+    "activeParc": 10000,
+    "iceShare": 0.85,
+    "vedTable": {
+      "Vital": {
+        "floor": 0.99,
+        "weight": 10,
+        "zoneScore": 1.0
+      },
+      "Safety": {
+        "floor": 0.97,
+        "weight": 8,
+        "zoneScore": 0.8
+      },
+      "Essential": {
+        "floor": 0.9,
+        "weight": 5,
+        "zoneScore": 0.5
+      },
+      "Comfort": {
+        "floor": 0.8,
+        "weight": 2,
+        "zoneScore": 0.2
+      }
+    },
+    "priorityWeights": {
+      "criticality": 0.35,
+      "urgency": 0.3,
+      "financialExposure": 0.2,
+      "recoveryRisk": 0.15
+    },
+    "zoneWeights": {
+      "criticality": 0.3,
+      "consumption": 0.25,
+      "cost": 0.25,
+      "leadTime": 0.2,
+      "priorityThreshold": 0.5
+    },
+    "casebook": {
+      "emergencyRate": 0.22,
+      "premiumBand": [
+        0.35,
+        0.5
+      ],
+      "shrinkageRate": 0.03,
+      "annualProblemCostLakh": [
+        45,
+        55
+      ],
+      "skus": 5000
+    },
+    "naiveBufferDays": 60,
+    "scenarios": {
+      "headline": "expected",
+      "best": {
+        "label": "Best case",
+        "varianceFloor": false,
+        "leadTimeCV": {
+          "Domestic": 0.0,
+          "Import": 0.0
+        },
+        "description": "The Excel as built: demand is smooth and every supplier delivers exactly on time."
+      },
+      "expected": {
+        "label": "Expected",
+        "varianceFloor": true,
+        "leadTimeCV": {
+          "Domestic": 0.1,
+          "Import": 0.25
+        },
+        "description": "Demand is at least as random as pure chance, and deliveries slip — imports by about a quarter of the lead time, domestic parts by a tenth."
+      },
+      "stress": {
+        "label": "Stress",
+        "varianceFloor": true,
+        "leadTimeCV": {
+          "Domestic": 0.2,
+          "Import": 0.4
+        },
+        "description": "Same random demand, and deliveries slip badly — imports by 40% of the lead time, domestic parts by 20%."
+      },
+      "formula": "sigmaLTD = sqrt(L * var_d + d^2 * (leadTimeCV * L)^2), var_d = max((CV*d)^2, d) if varianceFloor else (CV*d)^2; MIN = ceil(z * sigmaLTD); ROP = ceil(d*L + z*sigmaLTD). With best, this is exactly the Excel's z*sigma*sqrt(L)."
+    },
+    "oldWay": {
+      "reviewDays": 30,
+      "coverDays": 60,
+      "basis": "usage in the last 30 days",
+      "description": "Every 30 days, order up to 60 days of cover based on last month's usage. No safety stock; ignores lead time and criticality. Same 60-day buffer as naiveBufferDays, so the capital baseline and the simulation baseline are one rule."
+    },
+    "metrics": {
+      "emergencyRate": "emergency orders / (regular orders + emergency orders). One emergency order per part per day that on-hand cannot cover. Matches the casebook wording '22% of orders become emergency'.",
+      "jobsWaiting": "days with a shortfall / days with demand, per part. Cannot be improved by ordering more often, so it is shown next to emergencyRate.",
+      "projectedStockoutRate": "Excel's 11.4%: sum(D/EOQ * (1 - SL)) / sum(D/EOQ), the share of reorder cycles expected to run out. A design target, not a measured result."
+    }
+  },
+  "testSet": [
+    "Engine Oil Filter",
+    "Cabin AC Filter",
+    "Wiper Blade Set",
+    "AGM Battery 80Ah (Varta OE)",
+    "AC Compressor Assembly",
+    "Timing Chain Kit"
+  ],
+  "catalogue": [
+    {
+      "name": "Engine Oil Filter",
+      "ved": "Essential",
+      "route": "Domestic",
+      "pattern": "Scheduled",
+      "baseAnnualDemand": 6700,
+      "adjAnnualDemand": 12181.82,
+      "unitCost": 850,
+      "leadTimeNormal": 4,
+      "leadTimeUrgent": 2,
+      "emergencyPremium": 0.12,
+      "supplier": "Mahle India, Pune",
+      "origin": "India — Domestic",
+      "weightKg": 0.3
+    },
+    {
+      "name": "Cabin AC Filter",
+      "ved": "Comfort",
+      "route": "Domestic",
+      "pattern": "Scheduled",
+      "baseAnnualDemand": 4800,
+      "adjAnnualDemand": 8727.27,
+      "unitCost": 1200,
+      "leadTimeNormal": 6,
+      "leadTimeUrgent": 2,
+      "emergencyPremium": 0.12,
+      "supplier": "Bosch India, Bengaluru",
+      "origin": "India — Domestic",
+      "weightKg": 0.2
+    },
+    {
+      "name": "Engine Oil MB 229.51 (5L)",
+      "ved": "Essential",
+      "route": "Import",
+      "pattern": "Scheduled",
+      "baseAnnualDemand": 6700,
+      "adjAnnualDemand": 12181.82,
+      "unitCost": 5200,
+      "leadTimeNormal": 20,
+      "leadTimeUrgent": 5,
+      "emergencyPremium": 0.425,
+      "supplier": "Fuchs/Total (packed at Chakan)",
+      "origin": "Germany",
+      "weightKg": 5
+    },
+    {
+      "name": "Wiper Blade Set",
+      "ved": "Safety",
+      "route": "Import",
+      "pattern": "Scheduled",
+      "baseAnnualDemand": 3300,
+      "adjAnnualDemand": 6000.0,
+      "unitCost": 2800,
+      "leadTimeNormal": 10,
+      "leadTimeUrgent": 3,
+      "emergencyPremium": 0.425,
+      "supplier": "Bosch (rubber ex-Germany, assembled India)",
+      "origin": "Germany/India",
+      "weightKg": 0.4
+    },
+    {
+      "name": "Fuel Filter (diesel)",
+      "ved": "Essential",
+      "route": "Import",
+      "pattern": "Scheduled",
+      "baseAnnualDemand": 450,
+      "adjAnnualDemand": 818.18,
+      "unitCost": 3600,
+      "leadTimeNormal": 27,
+      "leadTimeUrgent": 8,
+      "emergencyPremium": 0.425,
+      "supplier": "Mann+Hummel, Ludwigsburg",
+      "origin": "Germany",
+      "weightKg": 0.6
+    },
+    {
+      "name": "Front Brake Pads (Textar OE)",
+      "ved": "Vital",
+      "route": "Import",
+      "pattern": "Failure-Driven",
+      "baseAnnualDemand": 700,
+      "adjAnnualDemand": 1272.73,
+      "unitCost": 12500,
+      "leadTimeNormal": 37,
+      "leadTimeUrgent": 6,
+      "emergencyPremium": 0.425,
+      "supplier": "TMD Friction, Leverkusen",
+      "origin": "Germany",
+      "weightKg": 2.5
+    },
+    {
+      "name": "Rear Brake Pads (Textar OE)",
+      "ved": "Vital",
+      "route": "Import",
+      "pattern": "Failure-Driven",
+      "baseAnnualDemand": 520,
+      "adjAnnualDemand": 945.45,
+      "unitCost": 9800,
+      "leadTimeNormal": 37,
+      "leadTimeUrgent": 6,
+      "emergencyPremium": 0.425,
+      "supplier": "TMD Friction, Leverkusen",
+      "origin": "Germany",
+      "weightKg": 2
+    },
+    {
+      "name": "Front Brake Discs (pair)",
+      "ved": "Vital",
+      "route": "Import",
+      "pattern": "Failure-Driven",
+      "baseAnnualDemand": 210,
+      "adjAnnualDemand": 381.82,
+      "unitCost": 22000,
+      "leadTimeNormal": 50,
+      "leadTimeUrgent": 8,
+      "emergencyPremium": 0.425,
+      "supplier": "ATE / Brembo",
+      "origin": "Germany/Italy",
+      "weightKg": 9
+    },
+    {
+      "name": "Spark Plugs, NGK Iridium (set/4)",
+      "ved": "Essential",
+      "route": "Import",
+      "pattern": "Scheduled",
+      "baseAnnualDemand": 900,
+      "adjAnnualDemand": 1636.36,
+      "unitCost": 6800,
+      "leadTimeNormal": 30,
+      "leadTimeUrgent": 7,
+      "emergencyPremium": 0.425,
+      "supplier": "NGK",
+      "origin": "Japan",
+      "weightKg": 0.2
+    },
+    {
+      "name": "Coolant MB 325.5 (5L)",
+      "ved": "Essential",
+      "route": "Import",
+      "pattern": "Scheduled",
+      "baseAnnualDemand": 1375,
+      "adjAnnualDemand": 2500.0,
+      "unitCost": 3800,
+      "leadTimeNormal": 25,
+      "leadTimeUrgent": 5,
+      "emergencyPremium": 0.425,
+      "supplier": "BASF / Fuchs",
+      "origin": "Germany",
+      "weightKg": 5
+    },
+    {
+      "name": "9G-Tronic ATF Fluid (1L, top-up)",
+      "ved": "Essential",
+      "route": "Import",
+      "pattern": "Scheduled",
+      "baseAnnualDemand": 300,
+      "adjAnnualDemand": 545.45,
+      "unitCost": 2900,
+      "leadTimeNormal": 35,
+      "leadTimeUrgent": 7,
+      "emergencyPremium": 0.425,
+      "supplier": "Shell / Fuchs",
+      "origin": "Germany",
+      "weightKg": 0.9
+    },
+    {
+      "name": "9G-Tronic Transmission Service Kit",
+      "ved": "Essential",
+      "route": "Import",
+      "pattern": "Scheduled",
+      "baseAnnualDemand": 250,
+      "adjAnnualDemand": 454.55,
+      "unitCost": 22000,
+      "leadTimeNormal": 42,
+      "leadTimeUrgent": 8,
+      "emergencyPremium": 0.425,
+      "supplier": "ZF Friedrichshafen",
+      "origin": "Germany",
+      "weightKg": 10
+    },
+    {
+      "name": "AGM Battery 80Ah (Varta OE)",
+      "ved": "Essential",
+      "route": "Domestic",
+      "pattern": "Failure-Driven",
+      "baseAnnualDemand": 700,
+      "adjAnnualDemand": 1272.73,
+      "unitCost": 18500,
+      "leadTimeNormal": 12,
+      "leadTimeUrgent": 3,
+      "emergencyPremium": 0.12,
+      "supplier": "Varta / Exide JV, Gujarat",
+      "origin": "India — Domestic",
+      "weightKg": 22
+    },
+    {
+      "name": "Serpentine Drive Belt",
+      "ved": "Essential",
+      "route": "Import",
+      "pattern": "Scheduled",
+      "baseAnnualDemand": 90,
+      "adjAnnualDemand": 163.64,
+      "unitCost": 4200,
+      "leadTimeNormal": 30,
+      "leadTimeUrgent": 6,
+      "emergencyPremium": 0.425,
+      "supplier": "Continental, Hanover",
+      "origin": "Germany",
+      "weightKg": 0.3
+    },
+    {
+      "name": "Run-Flat Tyre 225/45 R18",
+      "ved": "Vital",
+      "route": "Import",
+      "pattern": "Failure-Driven",
+      "baseAnnualDemand": 550,
+      "adjAnnualDemand": 1000.0,
+      "unitCost": 32000,
+      "leadTimeNormal": 60,
+      "leadTimeUrgent": 10,
+      "emergencyPremium": 0.425,
+      "supplier": "Michelin / Continental",
+      "origin": "France/Germany",
+      "weightKg": 11
+    },
+    {
+      "name": "Engine Mount (hydraulic)",
+      "ved": "Essential",
+      "route": "Import",
+      "pattern": "Failure-Driven",
+      "baseAnnualDemand": 130,
+      "adjAnnualDemand": 236.36,
+      "unitCost": 19500,
+      "leadTimeNormal": 40,
+      "leadTimeUrgent": 8,
+      "emergencyPremium": 0.425,
+      "supplier": "Vibracoustic / ContiTech",
+      "origin": "Germany",
+      "weightKg": 3.5
+    },
+    {
+      "name": "Front Control Arm Assembly",
+      "ved": "Safety",
+      "route": "Import",
+      "pattern": "Failure-Driven",
+      "baseAnnualDemand": 95,
+      "adjAnnualDemand": 172.73,
+      "unitCost": 28000,
+      "leadTimeNormal": 45,
+      "leadTimeUrgent": 8,
+      "emergencyPremium": 0.425,
+      "supplier": "Lemförder (ZF)",
+      "origin": "Germany",
+      "weightKg": 4
+    },
+    {
+      "name": "Diesel Injector (C 220d)",
+      "ved": "Vital",
+      "route": "Import",
+      "pattern": "Failure-Driven",
+      "baseAnnualDemand": 40,
+      "adjAnnualDemand": 72.73,
+      "unitCost": 42000,
+      "leadTimeNormal": 55,
+      "leadTimeUrgent": 10,
+      "emergencyPremium": 0.425,
+      "supplier": "Bosch, Stuttgart-Feuerbach",
+      "origin": "Germany",
+      "weightKg": 0.5
+    },
+    {
+      "name": "AC Compressor Assembly",
+      "ved": "Essential",
+      "route": "Import",
+      "pattern": "Failure-Driven",
+      "baseAnnualDemand": 85,
+      "adjAnnualDemand": 154.55,
+      "unitCost": 75000,
+      "leadTimeNormal": 52,
+      "leadTimeUrgent": 10,
+      "emergencyPremium": 0.425,
+      "supplier": "Mahle Behr, Stuttgart",
+      "origin": "Germany",
+      "weightKg": 6
+    },
+    {
+      "name": "Timing Chain Kit",
+      "ved": "Vital",
+      "route": "Import",
+      "pattern": "Failure-Driven",
+      "baseAnnualDemand": 20,
+      "adjAnnualDemand": 36.36,
+      "unitCost": 38000,
+      "leadTimeNormal": 67,
+      "leadTimeUrgent": 12,
+      "emergencyPremium": 0.425,
+      "supplier": "INA / Schaeffler, Herzogenaurach",
+      "origin": "Germany",
+      "weightKg": 3
+    }
+  ],
+  "expected": {
+    "algorithm1": [
+      {
+        "name": "Engine Oil Filter",
+        "adjD": 12181.82,
+        "d": 33.3748,
+        "sigma": 5.0062,
+        "Cu": 102,
+        "Co": 170,
+        "criticalRatio": 0.375,
+        "serviceLevel": 0.9,
+        "z": 1.2816,
+        "safetyStock": 13,
+        "rop": 147,
+        "orderingCost": 500,
+        "eoq": 268,
+        "max": 415
+      },
+      {
+        "name": "Cabin AC Filter",
+        "adjD": 8727.27,
+        "d": 23.9103,
+        "sigma": 3.5865,
+        "Cu": 144,
+        "Co": 240,
+        "criticalRatio": 0.375,
+        "serviceLevel": 0.8,
+        "z": 0.8416,
+        "safetyStock": 8,
+        "rop": 151,
+        "orderingCost": 500,
+        "eoq": 191,
+        "max": 342
+      },
+      {
+        "name": "Wiper Blade Set",
+        "adjD": 6000,
+        "d": 16.4384,
+        "sigma": 2.4658,
+        "Cu": 1190,
+        "Co": 560,
+        "criticalRatio": 0.68,
+        "serviceLevel": 0.97,
+        "z": 1.8808,
+        "safetyStock": 15,
+        "rop": 180,
+        "orderingCost": 5000,
+        "eoq": 328,
+        "max": 508
+      },
+      {
+        "name": "AGM Battery 80Ah (Varta OE)",
+        "adjD": 1272.73,
+        "d": 3.4869,
+        "sigma": 1.5691,
+        "Cu": 2220,
+        "Co": 3700,
+        "criticalRatio": 0.375,
+        "serviceLevel": 0.9,
+        "z": 1.2816,
+        "safetyStock": 7,
+        "rop": 49,
+        "orderingCost": 500,
+        "eoq": 19,
+        "max": 68
+      },
+      {
+        "name": "AC Compressor Assembly",
+        "adjD": 154.55,
+        "d": 0.4234,
+        "sigma": 0.1905,
+        "Cu": 31875,
+        "Co": 15000,
+        "criticalRatio": 0.68,
+        "serviceLevel": 0.9,
+        "z": 1.2816,
+        "safetyStock": 2,
+        "rop": 24,
+        "orderingCost": 5000,
+        "eoq": 11,
+        "max": 35
+      },
+      {
+        "name": "Timing Chain Kit",
+        "adjD": 36.36,
+        "d": 0.0996,
+        "sigma": 0.0448,
+        "Cu": 16150,
+        "Co": 7600,
+        "criticalRatio": 0.68,
+        "serviceLevel": 0.99,
+        "z": 2.3263,
+        "safetyStock": 1,
+        "rop": 8,
+        "orderingCost": 5000,
+        "eoq": 7,
+        "max": 15
+      }
+    ],
+    "algorithm2": [
+      {
+        "name": "Engine Oil Filter",
+        "stockOnHand": 20,
+        "priorityScore": 4.551,
+        "rank": 5
+      },
+      {
+        "name": "Cabin AC Filter",
+        "stockOnHand": 60,
+        "priorityScore": 2.698,
+        "rank": 6
+      },
+      {
+        "name": "Wiper Blade Set",
+        "stockOnHand": 15,
+        "priorityScore": 5.97,
+        "rank": 3
+      },
+      {
+        "name": "AGM Battery 80Ah (Varta OE)",
+        "stockOnHand": 3,
+        "priorityScore": 5.043,
+        "rank": 4
+      },
+      {
+        "name": "AC Compressor Assembly",
+        "stockOnHand": 2,
+        "priorityScore": 7.727,
+        "rank": 2
+      },
+      {
+        "name": "Timing Chain Kit",
+        "stockOnHand": 1,
+        "priorityScore": 8.561,
+        "rank": 1
+      }
+    ],
+    "algorithm3": [
+      {
+        "name": "Engine Oil Filter",
+        "zoneScore": 0.15,
+        "zone": "SERVICING"
+      },
+      {
+        "name": "Cabin AC Filter",
+        "zoneScore": 0.2,
+        "zone": "SERVICING"
+      },
+      {
+        "name": "Wiper Blade Set",
+        "zoneScore": 0.52,
+        "zone": "PRIORITY"
+      },
+      {
+        "name": "AGM Battery 80Ah (Varta OE)",
+        "zoneScore": 0.57,
+        "zone": "PRIORITY"
+      },
+      {
+        "name": "AC Compressor Assembly",
+        "zoneScore": 0.76,
+        "zone": "PRIORITY"
+      },
+      {
+        "name": "Timing Chain Kit",
+        "zoneScore": 0.95,
+        "zone": "PRIORITY"
+      }
+    ],
+    "validation": {
+      "weightedProjectedStockoutRate": 0.1144,
+      "baseline": 0.22,
+      "capitalOurPolicy": 6638550,
+      "capitalNaive60Day": 12188318,
+      "capitalSaved": 5549768
+    },
+    "algorithm2_note": "stockOnHand values are the demo inputs used in the Excel for the priority test",
+    "byScenario": {
+      "best": {
+        "algorithm1": [
+          {
+            "name": "Engine Oil Filter",
+            "sigmaLTD": 10.0125,
+            "safetyStock": 13,
+            "rop": 147,
+            "eoq": 268,
+            "max": 415
+          },
+          {
+            "name": "Cabin AC Filter",
+            "sigmaLTD": 8.7852,
+            "safetyStock": 8,
+            "rop": 151,
+            "eoq": 191,
+            "max": 342
+          },
+          {
+            "name": "Wiper Blade Set",
+            "sigmaLTD": 7.7974,
+            "safetyStock": 15,
+            "rop": 180,
+            "eoq": 328,
+            "max": 508
+          },
+          {
+            "name": "AGM Battery 80Ah (Varta OE)",
+            "sigmaLTD": 5.4356,
+            "safetyStock": 7,
+            "rop": 49,
+            "eoq": 19,
+            "max": 68
+          },
+          {
+            "name": "AC Compressor Assembly",
+            "sigmaLTD": 1.374,
+            "safetyStock": 2,
+            "rop": 24,
+            "eoq": 11,
+            "max": 35
+          },
+          {
+            "name": "Timing Chain Kit",
+            "sigmaLTD": 0.3669,
+            "safetyStock": 1,
+            "rop": 8,
+            "eoq": 7,
+            "max": 15
+          }
+        ],
+        "capitalAtMax": 6638550,
+        "capitalNaive60Day": 12188335,
+        "capitalFreed": 5549785,
+        "projectedStockoutRate": 0.1144
+      },
+      "expected": {
+        "algorithm1": [
+          {
+            "name": "Engine Oil Filter",
+            "sigmaLTD": 17.6556,
+            "safetyStock": 23,
+            "rop": 157,
+            "eoq": 268,
+            "max": 425
+          },
+          {
+            "name": "Cabin AC Filter",
+            "sigmaLTD": 18.6889,
+            "safetyStock": 16,
+            "rop": 160,
+            "eoq": 191,
+            "max": 351
+          },
+          {
+            "name": "Wiper Blade Set",
+            "sigmaLTD": 43.0495,
+            "safetyStock": 81,
+            "rop": 246,
+            "eoq": 328,
+            "max": 574
+          },
+          {
+            "name": "AGM Battery 80Ah (Varta OE)",
+            "sigmaLTD": 7.704,
+            "safetyStock": 10,
+            "rop": 52,
+            "eoq": 19,
+            "max": 71
+          },
+          {
+            "name": "AC Compressor Assembly",
+            "sigmaLTD": 7.2331,
+            "safetyStock": 10,
+            "rop": 32,
+            "eoq": 11,
+            "max": 43
+          },
+          {
+            "name": "Timing Chain Kit",
+            "sigmaLTD": 3.0755,
+            "safetyStock": 8,
+            "rop": 14,
+            "eoq": 7,
+            "max": 21
+          }
+        ],
+        "capitalAtMax": 7726150,
+        "capitalNaive60Day": 12188335,
+        "capitalFreed": 4462185,
+        "projectedStockoutRate": 0.1144
+      },
+      "stress": {
+        "algorithm1": [
+          {
+            "name": "Engine Oil Filter",
+            "sigmaLTD": 29.0927,
+            "safetyStock": 38,
+            "rop": 171,
+            "eoq": 268,
+            "max": 439
+          },
+          {
+            "name": "Cabin AC Filter",
+            "sigmaLTD": 31.092,
+            "safetyStock": 27,
+            "rop": 170,
+            "eoq": 191,
+            "max": 361
+          },
+          {
+            "name": "Wiper Blade Set",
+            "sigmaLTD": 66.9918,
+            "safetyStock": 126,
+            "rop": 291,
+            "eoq": 328,
+            "max": 619
+          },
+          {
+            "name": "AGM Battery 80Ah (Varta OE)",
+            "sigmaLTD": 10.5772,
+            "safetyStock": 14,
+            "rop": 56,
+            "eoq": 19,
+            "max": 75
+          },
+          {
+            "name": "AC Compressor Assembly",
+            "sigmaLTD": 9.9793,
+            "safetyStock": 13,
+            "rop": 35,
+            "eoq": 11,
+            "max": 46
+          },
+          {
+            "name": "Timing Chain Kit",
+            "sigmaLTD": 3.7151,
+            "safetyStock": 9,
+            "rop": 16,
+            "eoq": 7,
+            "max": 23
+          }
+        ],
+        "capitalAtMax": 8251050,
+        "capitalNaive60Day": 12188335,
+        "capitalFreed": 3937285,
+        "projectedStockoutRate": 0.1144
+      }
+    },
+    "algorithm3Catalogue": [
+      {
+        "name": "Engine Oil Filter",
+        "zoneScore": 0.1632,
+        "zone": "SERVICING"
+      },
+      {
+        "name": "Cabin AC Filter",
+        "zoneScore": 0.11,
+        "zone": "SERVICING"
+      },
+      {
+        "name": "Engine Oil MB 229.51 (5L)",
+        "zoneScore": 0.2974,
+        "zone": "SERVICING"
+      },
+      {
+        "name": "Wiper Blade Set",
+        "zoneScore": 0.3268,
+        "zone": "SERVICING"
+      },
+      {
+        "name": "Fuel Filter (diesel)",
+        "zoneScore": 0.3974,
+        "zone": "SERVICING"
+      },
+      {
+        "name": "Front Brake Pads (Textar OE)",
+        "zoneScore": 0.6289,
+        "zone": "PRIORITY"
+      },
+      {
+        "name": "Rear Brake Pads (Textar OE)",
+        "zoneScore": 0.6421,
+        "zone": "PRIORITY"
+      },
+      {
+        "name": "Front Brake Discs (pair)",
+        "zoneScore": 0.8,
+        "zone": "PRIORITY"
+      },
+      {
+        "name": "Spark Plugs, NGK Iridium (set/4)",
+        "zoneScore": 0.3947,
+        "zone": "SERVICING"
+      },
+      {
+        "name": "Coolant MB 325.5 (5L)",
+        "zoneScore": 0.3211,
+        "zone": "SERVICING"
+      },
+      {
+        "name": "9G-Tronic ATF Fluid (1L, top-up)",
+        "zoneScore": 0.4289,
+        "zone": "SERVICING"
+      },
+      {
+        "name": "9G-Tronic Transmission Service Kit",
+        "zoneScore": 0.6158,
+        "zone": "PRIORITY"
+      },
+      {
+        "name": "AGM Battery 80Ah (Varta OE)",
+        "zoneScore": 0.4184,
+        "zone": "SERVICING"
+      },
+      {
+        "name": "Serpentine Drive Belt",
+        "zoneScore": 0.5132,
+        "zone": "PRIORITY"
+      },
+      {
+        "name": "Run-Flat Tyre 225/45 R18",
+        "zoneScore": 0.8053,
+        "zone": "PRIORITY"
+      },
+      {
+        "name": "Engine Mount (hydraulic)",
+        "zoneScore": 0.6184,
+        "zone": "PRIORITY"
+      },
+      {
+        "name": "Front Control Arm Assembly",
+        "zoneScore": 0.7821,
+        "zone": "PRIORITY"
+      },
+      {
+        "name": "Diesel Injector (C 220d)",
+        "zoneScore": 0.9526,
+        "zone": "PRIORITY"
+      },
+      {
+        "name": "AC Compressor Assembly",
+        "zoneScore": 0.7921,
+        "zone": "PRIORITY"
+      },
+      {
+        "name": "Timing Chain Kit",
+        "zoneScore": 0.9737,
+        "zone": "PRIORITY"
+      }
+    ],
+    "algorithm3Catalogue_note": "Zone percentiles ranked across all 20 catalogue parts (what the store map uses). Ties take the lower rank, like Excel RANK.EQ. Wiper Blade Set and AGM Battery move to SERVICING compared with the 6-part worked example."
+  },
+  "_changes": "v2 (2026-10-24): added assumptions.scenarios, assumptions.oldWay, assumptions.metrics, expected.byScenario and expected.algorithm3Catalogue. Nothing that existed in v1 was changed; expected.algorithm1/2/3 and expected.validation are the Excel values and equal the 'best' scenario. See CHANGES.md."
+}
