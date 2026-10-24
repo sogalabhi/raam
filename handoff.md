@@ -1,3 +1,5 @@
+> **v2 (24 Oct 2026):** headline is now the Expected scenario, there's one emergency-rate definition, the old way is a fixed rule, and zones are ranked across all 20 parts. See `CHANGES.md`. Original: `handoff.v1.md`.
+
 # Handoff: PartTrail, a Spare-Parts Control App (EPiC NGL Casebook 2026, Track 4)
 
 > Paste this whole file into Claude Code as the first message, and put `parts.json` in the project root (or `src/data/`).
